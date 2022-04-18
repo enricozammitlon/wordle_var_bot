@@ -1,0 +1,1 @@
+# wordle_var_bot
