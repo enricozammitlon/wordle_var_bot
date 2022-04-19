@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "dev": "wordle-var-bot",
+    "prod": "wordle-var-bot",
+    "default": "wordle-var-bot"
+  }
+}
