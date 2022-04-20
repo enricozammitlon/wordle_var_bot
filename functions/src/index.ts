@@ -115,6 +115,29 @@ export const receiveWebhook = functions.https.onRequest(
               return error;
             });
       }
+      if (content === "/genius" || content === "/aljorant") {
+        const id = message.chat.id;
+        functions.logger.info("Genius command", {structuredData: true});
+        const leaderboard = await getTop(id.toString(), content === "/aljorant")
+            .then((e) => e)
+            .catch((e)=>{
+              response.send(e); return;
+            });
+        const res = await axios
+            .post(
+                // eslint-disable-next-line max-len
+                `${process.env.TELEGRAM_API}${process.env.A_TOKEN}/sendMessage`,
+                {chat_id: id, text: leaderboard})
+            .then((res) => {
+              response.send(leaderboard);
+              return res;
+            })
+            .catch((error) => {
+              response.send(error);
+              return error;
+            });
+        return res;
+      }
       const game = getGame(content);
       if (game == "other") {
         response.send("Update received for non game");
@@ -193,6 +216,55 @@ const getLeaderboard = async (chatId : string, game? : string) => {
     });
     leaderboard+="\n";
   });
+  return leaderboard;
+};
+
+
+const getTop = async (chatId : string, reverse? :boolean) => {
+  const orderedList : {[key:string]: number} = {};
+  const penaltyList : {[key:string]: number} = {};
+  let leaderboard = "";
+  const today = new Date(
+      new Date().toLocaleString("en-US", {timeZone: "Europe/Rome"}))
+      .setUTCHours(0, 0, 0, 0);
+  functions.logger.info(today,
+      {structuredData: true});
+  await db.collection("daily_highscore")
+      .where("date", "==", today)
+      .where("chat_id", "==", chatId)
+      .orderBy("score", "asc")
+      .get().then((snapshot) => {
+        snapshot.forEach((doc) => {
+          const temp = orderedList[doc.data().username];
+          const temp2 = penaltyList[doc.data().username];
+
+          orderedList[doc.data().username] =
+           temp ? temp + doc.data().score : doc.data().score;
+          penaltyList[doc.data().username] =
+           temp2 ? temp2 + 1 : 1;
+        });
+      }).catch((reason) => {
+        throw reason;
+      });
+  const sortable : [string, number][] = [];
+  for (const total in orderedList) {
+    if ({}.hasOwnProperty.call(orderedList, total)) {
+      // The more games you complete the less the penalty 4 games -> 0 penalty
+      sortable.push([total, (6*(4-penaltyList[total]) )+ orderedList[total]]);
+    }
+  }
+
+  sortable.sort(function(a, b) {
+    return a[1] - b[1];
+  });
+
+  functions.logger.info(sortable,
+      {structuredData: true});
+  leaderboard= reverse ?
+  "The aljorant (alla jahfrilhom) is " :
+   "The genius is ";
+  leaderboard+= reverse ? sortable[sortable.length - 1][0] : sortable[0][0];
+  leaderboard+="\n";
   return leaderboard;
 };
 
